@@ -4,7 +4,14 @@
 #
 # Don't forget to add your pipeline to the ITEM_PIPELINES setting
 # See: https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-from twisted.enterprise import adbapi
+
+
+# -*- coding: utf-8 -*-
+
+# Define your item pipelines here
+#
+# Don't forget to add your pipeline to the ITEM_PIPELINES setting
+# See: https://docs.scrapy.org/en/latest/topics/item-pipeline.html
 import cx_Oracle
 
 
@@ -21,20 +28,21 @@ class OracleTwistedPipeline(object):
             dsn=cx_Oracle.makedsn(
                 settings["ORACLE_HOST"], settings["ORACLE_PORT"], service_name=settings["ORACLE_SERVICENAME"]),
             encoding='UTF-8',
+            min=2,
+            max=5,
+            increment=1,
+            threaded=True,
         )
-        dbpool = adbapi.ConnectionPool("cx_Oracle", **dbparms)
+        dbpool = cx_Oracle.SessionPool(**dbparms)
         return cls(dbpool)
 
     def process_item(self, item, spider):
-        query = self.dbpool.runInteraction(self.do_insert, item)
-        query.addErrback(self.handle_error, item, spider)
-
-    def do_insert(self, cursor, item):
-        insert_sql = "INSERT INTO TB_COMMON_NEWS(newtitle, newdetailurl,newcontext,newtime,newimgurl,newsource) ' \
-                    'VALUES (:1, :2, :3, :4, :5, :6)"
-        data = (item["title"], item["detailurl"], item["context"],
-                item["time"], item["imgurl"], item["source"])
-        cursor.execute(insert_sql % data)
-
-    def handle_error(self, failure, item, spider):
-        print(failure)
+        connection = self.dbpool.acquire()
+        cursor = connection.cursor()
+        sql = "insert when (not exists (select 1 from TB_COMMON_NEWS where newtitle = :newtitle and newsource = :newsource)) then into TB_COMMON_NEWS(newtitle, newdetailurl,newcontext,newtime,newsource) select :newtitle, :newdetailurl, :newcontext, :newtime, :newsource from dual"
+        param = {'newtitle': item['title'], 'newdetailurl': item['detailurl'],
+                 'newcontext': item['context'], 'newtime': item['time'], 'newsource': item['source']}
+        cursor.execute(sql, param)
+        connection.commit()
+        cursor.close()
+        return item

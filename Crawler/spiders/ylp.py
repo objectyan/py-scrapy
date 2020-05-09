@@ -4,6 +4,7 @@ import json
 from datetime import datetime
 from scrapy.selector import Selector
 
+
 class YlpSpider(scrapy.Spider):
     name = 'ylp'
     allowed_domains = ['www.y-lp.com']
@@ -25,9 +26,9 @@ class YlpSpider(scrapy.Spider):
                                  headers={
                                      'X-AjaxPro-Method': 'GetContent'
                                  },
-                                 callback=self.parse_page_item)
+                                 callback=self.parse)
 
-    def parse_page_item(self, response):
+    def parse(self, response):
         news = []
         for new in Selector(text=json.loads(response.body)['value']).css('div.news_item'):
             context = new.css("div.info::text").get()
